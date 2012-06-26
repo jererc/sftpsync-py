@@ -17,7 +17,7 @@ Example:
 
     sftp = Sftp(host, username, password, port=port)
 
-    # We don't want to backup evrything
+    # We don't want to backup everything
     exclude = [
         r'^Music/',
         r'^Video/',
@@ -25,5 +25,11 @@ Example:
     src = '/mnt/sdcard'
     dst = '/home/user/phone-backup/'
 
-    sftp.sync(src, dst, download=True, delete=True,
-            include=include, exclude=exclude)
+    sftp.sync(src, dst, download=True, delete=True, exclude=exclude)
+
+
+    # We sync a local directory to the phone
+    src = '/home/user/data/code/sftpsync-py'
+    dst = '/mnt/sdcard/data/'
+
+    sftp.sync(src, dst, download=False, delete=True)
