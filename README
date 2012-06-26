@@ -6,7 +6,7 @@ Remove destination files and directories if not present at source or excluded (i
 
 Example:
 
-    # We synchronize an Android phone sdcard mountpoint over SSH (assuming a SSH server is running on the device)
+    # We synchronize an Android phone sdcard mountpoint to our home (assuming a SSH server is running on the device)
 
     from sftpsync import Sftp
 
