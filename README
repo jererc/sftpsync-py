@@ -1,4 +1,4 @@
-Sync directories over SSH from a remote directory to a local one, and vice versa.
+Sync files and directories over SSH.
 
 Update destination files according to the source size and modified time.
 Remove destination files and directories if not present at source or excluded (include/exclude parameters).
@@ -6,7 +6,7 @@ Remove destination files and directories if not present at source or excluded (i
 
 Example:
 
-    # We synchronize an Android phone sdcard mountpoint to our home (assuming a SSH server is running on the device)
+    # We synchronize a stock Android phone sdcard mountpoint to our home (assuming a SSH server is running on the device)
 
     from sftpsync import Sftp
 

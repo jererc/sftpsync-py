@@ -14,24 +14,23 @@ class Sftp(object):
     def __init__(self, host, username, password=None, port=22,
                 timeout=10, max_attempts=3, log_errors=True, **kwargs):
         self.host = host
+        self.port = port
         self.username = username
         self.password = password
-
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.sftp = None
+        self.logged = False
         for i in range(max_attempts):
             try:
                 self.client.connect(host, port=port, username=username,
                         password=password, timeout=timeout, **kwargs)
                 self.sftp = self.client.open_sftp()
                 self.logged = True
-                break
+                return
             except Exception, e:
-                self.sftp = None
-                self.logged = False
-
-        if not self.logged and log_errors:
-            logger.error('failed to connect to %s@%s: %s', username, host, e)
+                if i == max_attempts - 1 and log_errors:
+                    logger.error('failed to connect to %s@%s:%s: %s', username, host, port, e)
 
     def _listdir(self, path):
         for file in self.sftp.listdir(path):
