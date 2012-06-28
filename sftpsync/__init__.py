@@ -33,8 +33,11 @@ class Sftp(object):
                     logger.error('failed to connect to %s@%s:%s: %s', username, host, port, e)
 
     def _listdir(self, path):
-        for file in self.sftp.listdir(path):
-            yield os.path.join(path, file)
+        try:
+            for file in self.sftp.listdir(path):
+                yield os.path.join(path, file)
+        except Exception, e:
+            logger.info('failed to list %s: %s', path, str(e))
 
     def _makedirs(self, path):
         paths = []
