@@ -57,7 +57,7 @@ class Sftp(object):
                     yield 'file', file, stat
                 else:
                     yield 'dir', file, stat
-                    for res in self.walk_remote(file, topdown=topdown):
+                    for res in self._walk_remote(file, topdown=topdown):
                         yield res
 
             else:
