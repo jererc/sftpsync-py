@@ -17,15 +17,16 @@ Example:
 
     sftp = Sftp(host, username, password, port=port)
 
+    src = '/mnt/sdcard'
+    dst = '/home/user/phone-backup/'
+
     # We don't want to backup everything
     exclude = [
         r'^Music/',
         r'^Video/',
         ]
-    src = '/mnt/sdcard'
-    dst = '/home/user/phone-backup/'
 
-    sftp.sync(src, dst, download=True, delete=True, exclude=exclude)
+    sftp.sync(src, dst, download=True, exclude=exclude, delete=True)
 
 
     # We sync a local directory to the phone

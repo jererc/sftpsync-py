@@ -37,41 +37,23 @@ class Sftp(object):
             for file in self.sftp.listdir(path):
                 yield os.path.join(path, file)
         except Exception, e:
-            logger.info('failed to list %s: %s', path, str(e))
-
-    def _makedirs(self, path):
-        paths = []
-        while path not in ('/', ''):
-            paths.insert(0, path)
-            path = os.path.dirname(path)
-
-        for path in paths:
-            try:
-                self.sftp.lstat(path)
-            except Exception:
-                self.sftp.mkdir(path)
+            logger.info('failed to list %s: %s', path, e)
 
     def _walk_remote(self, path, topdown=True):
         for file in self._listdir(path):
             stat = self.sftp.lstat(file)
 
-            if topdown:
-                if not S_ISDIR(stat.st_mode):
-                    yield 'file', file, stat
-                else:
+            if not S_ISDIR(stat.st_mode):
+                yield 'file', file, stat
+            else:
+                if topdown:
                     yield 'dir', file, stat
                     for res in self._walk_remote(file, topdown=topdown):
                         yield res
-
-            else:
-                if S_ISDIR(stat.st_mode):
+                else:
                     for res in self._walk_remote(file, topdown=topdown):
                         yield res
-
                     yield 'dir', file, None
-                    continue
-
-                yield 'file', file, stat
 
     def _walk_local(self, path, topdown=True):
         for path, dirs, files in os.walk(path, topdown=topdown):
@@ -82,98 +64,103 @@ class Sftp(object):
                 dir = os.path.join(path, dir)
                 yield 'dir', dir, os.stat(dir)
 
-    def _validate_remote(self, file, src_stat):
-        try:
-            dst_stat = self.sftp.lstat(file)
-        except Exception:
-            return
-        if dst_stat.st_mtime != src_stat.st_mtime:
-            return
-        if dst_stat.st_size != src_stat.st_size:
-            return
-        return True
+    def _walk(self, *args, **kwargs):
+        remote = kwargs.pop('remote', False)
+        if remote:
+            return self._walk_remote(*args, **kwargs)
+        else:
+            return self._walk_local(*args, **kwargs)
 
-    def _validate_local(self, file, src_stat):
-        if not os.path.exists(file):
-            return
-        dst_stat = os.stat(file)
-        if dst_stat.st_mtime != src_stat.st_mtime:
-            return
-        if dst_stat.st_size != src_stat.st_size:
-            return
-        return True
+    def _makedirs_dst(self, path, remote=True, dry=False):
+        if remote:
+            paths = []
+            while path not in ('/', ''):
+                paths.insert(0, path)
+                path = os.path.dirname(path)
 
-    def _store_remote(self, src, dst, src_stat):
-        self.sftp.put(src, dst)
-        self.sftp.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-
-    def _store_local(self, src, dst, src_stat):
-        self.sftp.get(src, dst)
-        os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
-
-    def _delete_remote(self, path, files, dry=False):
-        for type, file, stat in self._walk_remote(path, topdown=False):
-            if file not in files[type]:
+            for path in paths:
                 try:
+                    self.sftp.lstat(path)
+                except Exception:
                     if not dry:
-                        if type == 'file':
-                            self.sftp.remove(file)
-                        else:
-                            self.sftp.rmdir(file)
+                        self.sftp.mkdir(path)
+                    logger.debug('created destination directory %s', path)
+        else:
+            if not os.path.exists(path):
+                if not dry:
+                    os.makedirs(path)
+                logger.debug('created destination directory %s', path)
 
-                    logger.debug('removed %s', file)
-                except Exception, e:
-                    logger.debug('failed to remove remote file %s: %s', file, e)
-
-    def _delete_local(self, path, files, dry=False):
-        for type, file, stat in self._walk_local(path, topdown=False):
-            if file not in files[type]:
-                try:
-                    if not dry:
-                        if type == 'file':
-                            os.remove(file)
-                        else:
-                            os.rmdir(file)
-
-                    logger.debug('removed %s', file)
-                except Exception, e:
-                    logger.debug('failed to remove local file %s: %s', file, e)
-
-    def _get_filters(self, filters):
-        res = []
-        for filter in filters:
-            res.append(re.compile(filter))
-        return res
-
-    def _validate_filters(self, val, include, exclude):
+    def _validate_src(self, file, include, exclude):
         for re_ in include:
-            if not re_.search(val):
+            if not re_.search(file):
                 return False
         for re_ in exclude:
-            if re_.search(val):
+            if re_.search(file):
                 return False
         return True
 
+    def _validate_dst(self, file, src_stat, remote=True):
+        if remote:
+            try:
+                dst_stat = self.sftp.lstat(file)
+            except Exception:
+                return
+        else:
+            if not os.path.exists(file):
+                return
+            dst_stat = os.stat(file)
+
+        if dst_stat.st_mtime != src_stat.st_mtime:
+            return
+        if dst_stat.st_size != src_stat.st_size:
+            return
+        return True
+
+    def _save(self, src, dst, src_stat, remote=True):
+        if remote:
+            self.sftp.put(src, dst)
+            self.sftp.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+        else:
+            self.sftp.get(src, dst)
+            os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+
+    def _delete_dst(self, path, files, remote=True, dry=False):
+        if remote:
+            callables = {'file': self.sftp.remove, 'dir': self.sftp.rmdir}
+        else:
+            callables = {'file': os.remove, 'dir': os.rmdir}
+
+        for type, file, stat in self._walk(path, topdown=False, remote=remote):
+            if file not in files[type]:
+                if not dry:
+                    try:
+                        callables[type](file)
+                    except Exception, e:
+                        logger.debug('failed to remove %s: %s', file, e)
+                        continue
+
+                logger.debug('removed %s', file)
+
+    def _get_filters(self, filters):
+        if not filters:
+            return []
+        return [re.compile(f) for f in filters]
+
     def sync(self, src, dst, download=True, include=None, exclude=None, delete=False, dry=False):
-        '''Sync directories.
+        '''Sync files and directories.
 
         :param src: source directory
         :param dst: destination directory
         :param download: True to sync from a remote source to a local destination,
-            else from a local source to a remote destination
+            else sync from a local source to a remote destination
         :param include: list of regex patterns the source files must match
         :param exclude: list of regex patterns the source files must not match
-        :param delete: remove destination files and directories not present at source
-            or filtered by the include/exlude patterns
+        :param delete: remove destination files and directories not present
+            at source or filtered by the include/exlude patterns
         '''
-        if not exclude:
-            exclude = []
-        if not include:
-            include = []
-        if exclude:
-            exclude = self._get_filters(exclude)
-        if include:
-            include = self._get_filters(include)
+        include = self._get_filters(include)
+        exclude = self._get_filters(exclude)
 
         if src.endswith('/') != dst.endswith('/'):
             dst = os.path.join(dst, os.path.basename(src.rstrip('/')))
@@ -182,28 +169,15 @@ class Sftp(object):
         if not src:
             src = '/'
 
-        if download:
-            callable_walk = self._walk_remote
-            callable_delete = self._delete_local
-            callable_validate = self._validate_local
-            callable_store = self._store_local
-            if not dry and not os.path.exists(dst):
-                os.makedirs(dst)
-        else:
-            callable_walk = self._walk_local
-            callable_delete = self._delete_remote
-            callable_validate = self._validate_remote
-            callable_store = self._store_remote
-            if not dry:
-                self._makedirs(dst)
+        self._makedirs_dst(dst, remote=not download, dry=dry)
 
         started = datetime.utcnow()
         total_size = 0
         dst_list = {'file': [], 'dir': []}
 
-        for type, file, stat in callable_walk(src):
+        for type, file, stat in self._walk(src, remote=download):
             file_ = re_base.sub('', file)
-            if not self._validate_filters(file_, include, exclude):
+            if not self._validate_src(file_, include, exclude):
                 logger.debug('filtered %s', file)
                 continue
 
@@ -211,25 +185,15 @@ class Sftp(object):
             dst_list[type].append(dst_file)
 
             if type == 'dir':
-                if download:
-                    if not os.path.exists(dst_file):
-                        os.makedirs(dst_file)
-                        logger.debug('created destination directory %s', dst_file)
-                else:
-                    try:
-                        self.sftp.lstat(dst_file)
-                    except Exception:
-                        self.sftp.mkdir(dst_file)
-                        logger.debug('created destination directory %s', dst_file)
-
+                self._makedirs_dst(dst_file, remote=not download, dry=dry)
             elif type == 'file':
-                if not callable_validate(dst_file, stat):
+                if not self._validate_dst(dst_file, stat, remote=not download):
                     if not dry:
-                        callable_store(file, dst_file, stat)
+                        self._save(file, dst_file, stat, remote=not download)
                     total_size += stat.st_size
                     logger.debug('copied %s to %s', file, dst_file)
 
         if delete:
-            callable_delete(dst, dst_list, dry=dry)
+            self._delete_dst(dst, dst_list, remote=not download, dry=dry)
 
         logger.debug('transferred %s bytes in %s', total_size, datetime.utcnow() - started)
