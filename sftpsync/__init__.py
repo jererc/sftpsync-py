@@ -119,9 +119,11 @@ class Sftp(object):
 
     def _save(self, src, dst, src_stat, remote=True):
         if remote:
+            logger.info('copying %s to %s@%s:%s', src, self.username, self.host, dst)
             self.sftp.put(src, dst)
             self.sftp.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
         else:
+            logger.info('copying %s@%s:%s to %s', self.username, self.host, src, dst)
             self.sftp.get(src, dst)
             os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
 
