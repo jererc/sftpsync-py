@@ -111,7 +111,7 @@ class Sftp(object):
                 return
             dst_stat = os.stat(file)
 
-        if dst_stat.st_mtime != src_stat.st_mtime:
+        if int(dst_stat.st_mtime) != int(src_stat.st_mtime):
             return
         if dst_stat.st_size != src_stat.st_size:
             return
@@ -121,11 +121,11 @@ class Sftp(object):
         if remote:
             logger.info('copying %s to %s@%s:%s', src, self.username, self.host, dst)
             self.sftp.put(src, dst)
-            self.sftp.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+            self.sftp.utime(dst, (int(src_stat.st_atime), int(src_stat.st_mtime)))
         else:
             logger.info('copying %s@%s:%s to %s', self.username, self.host, src, dst)
             self.sftp.get(src, dst)
-            os.utime(dst, (src_stat.st_atime, src_stat.st_mtime))
+            os.utime(dst, (int(src_stat.st_atime), int(src_stat.st_mtime)))
 
     def _delete_dst(self, path, files, remote=True, dry=False):
         if remote:
