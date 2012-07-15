@@ -7,12 +7,20 @@ import logging
 import paramiko
 
 
+MTIME_TOLERANCE = 3
+
+
 logger = logging.getLogger(__name__)
 
 
+class AuthenticationError(Exception): pass
+class TimeoutError(Exception): pass
+class SshError(Exception): pass
+
+
 class Sftp(object):
-    def __init__(self, host, username, password=None, port=22,
-                timeout=10, max_attempts=3, log_errors=True, **kwargs):
+    def __init__(self, host, username, password=None, port=22, timeout=10,
+                max_attempts=3, **kwargs):
         self.host = host
         self.port = port
         self.username = username
@@ -20,17 +28,19 @@ class Sftp(object):
         self.client = paramiko.SSHClient()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.sftp = None
-        self.logged = False
         for i in range(max_attempts):
             try:
                 self.client.connect(host, port=port, username=username,
                         password=password, timeout=timeout, **kwargs)
                 self.sftp = self.client.open_sftp()
-                self.logged = True
                 return
+            except (paramiko.BadHostKeyException, paramiko.AuthenticationException), e:
+                raise AuthenticationError(str(e))
+            except socket.timeout, e:
+                raise TimeoutError(str(e))
             except Exception, e:
-                if i == max_attempts - 1 and log_errors:
-                    logger.error('failed to connect to %s@%s:%s: %s', username, host, port, e)
+                if i == max_attempts - 1:
+                    raise SshError(str(e))
 
     def _listdir(self, path):
         try:
@@ -111,7 +121,9 @@ class Sftp(object):
                 return
             dst_stat = os.stat(file)
 
-        if int(dst_stat.st_mtime) != int(src_stat.st_mtime):
+        if abs(dst_stat.st_mtime - src_stat.st_mtime) > MTIME_TOLERANCE:
+            logger.debug('%s modified time mismatch (source: %s, destination: %s)',
+                    file, datetime.utcfromtimestamp(src_stat.st_mtime), datetime.utcfromtimestamp(dst_stat.st_mtime))
             return
         if dst_stat.st_size != src_stat.st_size:
             return
