@@ -1,5 +1,6 @@
 import os
 import re
+import socket
 from stat import S_ISDIR
 from datetime import datetime
 import logging
@@ -42,16 +43,14 @@ class Sftp(object):
                 if i == max_attempts - 1:
                     raise SshError(str(e))
 
-    def _listdir(self, path):
-        try:
-            for file in self.sftp.listdir(path):
-                yield os.path.join(path, file)
-        except Exception, e:
-            logger.info('failed to list %s: %s', path, e)
-
     def _walk_remote(self, path, topdown=True):
-        for file in self._listdir(path):
-            stat = self.sftp.lstat(file)
+        try:
+            res = self.sftp.listdir_attr(path)
+        except IOError:
+            res = []
+
+        for stat in res:
+            file = os.path.join(path, stat.filename)
 
             if not S_ISDIR(stat.st_mode):
                 yield 'file', file, stat
