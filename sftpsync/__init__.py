@@ -150,7 +150,7 @@ class Sftp(object):
                     try:
                         callables[type](file)
                     except Exception, e:
-                        logger.debug('failed to remove %s: %s', file, e)
+                        logger.debug('failed to remove %s: %s', file, str(e))
                         continue
 
                 logger.debug('removed %s', file)
