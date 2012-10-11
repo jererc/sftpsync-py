@@ -10,7 +10,6 @@ import paramiko
 
 MTIME_TOLERANCE = 3
 
-
 logger = logging.getLogger(__name__)
 
 
