@@ -19,6 +19,7 @@ class SshError(Exception): pass
 
 
 class Sftp(object):
+
     def __init__(self, host, username, password=None, port=22, timeout=10,
                 max_attempts=3, **kwargs):
         self.host = host
