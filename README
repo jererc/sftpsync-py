@@ -10,21 +10,13 @@ Example:
 
     from sftpsync import Sftp
 
-    host = '192.168.1.149'
-    port = 2222
-    username = 'root'
-    password = 'password'
-
-    sftp = Sftp(host, username, password, port=port)
+    sftp = Sftp('192.168.1.149', 'root', 'password', port=2222)
 
     src = '/mnt/sdcard'
     dst = '/home/user/phone-backup/'
 
     # We don't want to backup everything
-    exclude = [
-        r'^Music/',
-        r'^Video/',
-        ]
+    exclude = [r'^Music/', r'^Video/']
 
     sftp.sync(src, dst, download=True, exclude=exclude, delete=True)
 
